@@ -1,6 +1,41 @@
 import { ArmorPiece, ArmorStats, StatType, TIER_STAT_VALUES, MOD_VALUES } from '../types/armor';
 import { ARMOR_PATTERNS } from '../data/patterns';
 
+// Fonction inutilisée, commentée pour éviter l'erreur de linter
+/*
+export const calculatePieceStats = (piece: ArmorPiece): Stats => {
+  const stats: Stats = {
+    weapon: 5,
+    health: 5,
+    class: 5,
+    grenade: 5,
+    melee: 5,
+    super: 5
+  };
+
+  // Appliquer les valeurs spécifiées
+  if (piece.pattern.mainStatValue) {
+    stats[piece.pattern.mainStat] = piece.pattern.mainStatValue;
+  }
+  if (piece.pattern.subStatValue) {
+    stats[piece.pattern.subStat] = piece.pattern.subStatValue;
+  }
+  if (piece.pattern.thirdStatValue) {
+    stats[piece.pattern.thirdStat] = piece.pattern.thirdStatValue;
+  }
+
+  // Appliquer les mods
+  piece.smallMods.forEach(mod => {
+    stats[mod] += MOD_VALUES.small;
+  });
+  piece.largeMods.forEach(mod => {
+    stats[mod] += MOD_VALUES.large;
+  });
+
+  return stats;
+};
+*/
+
 export function calculatePieceStats(piece: ArmorPiece): ArmorStats {
   const stats: ArmorStats = {
     weapon: 5,

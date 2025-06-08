@@ -633,7 +633,7 @@ export default function StatsForm() {
                 : results.slice(0, 1)
               ).map((result, index) => {
                 const totalStats = calculateTotalStats(result.combination);
-                const uniquePatternCount = new Set(result.combination.map((p: any) => p.pattern.name)).size;
+                const uniquePatternCount = new Set(result.combination.map((p: ArmorPiece) => p.pattern.name)).size;
 
                 const statOrder: StatType[] = ['health', 'melee', 'grenade', 'super', 'class', 'weapon'];
                 const orderedStats = statOrder.map(stat => [stat, totalStats[stat]] as [string, number]);
