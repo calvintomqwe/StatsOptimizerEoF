@@ -127,10 +127,10 @@ export function findBestCombination(
     const pieces = [...fixedArmors];
     let currentStats = calculateTotalStats(pieces);
     let currentScore = calculateScore(currentStats, targetStats);
-    let currentMods = { small: modCounts.small, large: modCounts.large };
+    const currentMods = new Set<string>();
 
     // Appliquer les mods sur les armures fixes
-    while (currentMods.small > 0 || currentMods.large > 0) {
+    while (currentMods.size < modCounts.small + modCounts.large) {
       let bestModImprovement = -Infinity;
       let bestModPiece = -1;
       let bestModType: 'small' | 'large' | null = null;
@@ -139,7 +139,7 @@ export function findBestCombination(
       for (let i = 0; i < pieces.length; i++) {
         const piece = pieces[i];
         if (piece.smallMods.length === 0 && piece.largeMods.length === 0) {
-          if (currentMods.small > 0) {
+          if (currentMods.size < modCounts.small) {
             for (const stat of allStats) {
               const tempPiece: ArmorPiece = {
                 ...piece,
@@ -158,7 +158,7 @@ export function findBestCombination(
               }
             }
           }
-          if (currentMods.large > 0) {
+          if (currentMods.size < modCounts.large) {
             for (const stat of allStats) {
               const tempPiece: ArmorPiece = {
                 ...piece,
@@ -188,14 +188,14 @@ export function findBestCombination(
           smallMods: [bestModStat],
           largeMods: []
         };
-        currentMods.small--;
+        currentMods.add(bestModStat);
       } else if (bestModType === 'large' && bestModStat) {
         pieces[bestModPiece] = {
           ...pieces[bestModPiece],
           smallMods: [],
           largeMods: [bestModStat]
         };
-        currentMods.large--;
+        currentMods.add(bestModStat);
       }
 
       currentStats = calculateTotalStats(pieces);
@@ -205,7 +205,7 @@ export function findBestCombination(
     const isTargetAchieved = isTargetStatsAchieved(currentStats, targetStats);
     return [{
       combination: pieces,
-      remainingMods: currentMods,
+      remainingMods: { small: modCounts.small - currentMods.size, large: modCounts.large - currentMods.size },
       score: currentScore,
       isTargetAchieved
     }];
@@ -307,17 +307,17 @@ export function findBestCombination(
 
         let currentStats = calculateTotalStats(pieces);
         let currentScore = calculateScore(currentStats, targetStats);
-        let currentMods = { small: modCounts.small, large: modCounts.large };
+        const currentMods = new Set<string>();
 
         // Si on a des armures fixes, on essaie d'abord d'appliquer un mod sur chacune
-        if (fixedArmorsWithTypes.length > 0 && (currentMods.small > 0 || currentMods.large > 0)) {
+        if (fixedArmorsWithTypes.length > 0 && (currentMods.size < modCounts.small + modCounts.large)) {
           for (let i = pieces.length - fixedArmorsWithTypes.length; i < pieces.length; i++) {
             let bestFixedModImprovement = -Infinity;
             let bestFixedModType: 'small' | 'large' | null = null;
             let bestFixedModStat: StatType | null = null;
 
             // Essayer d'abord un grand mod
-            if (currentMods.large > 0) {
+            if (currentMods.size < modCounts.large) {
               for (const stat of allStats) {
                 const tempPiece: ArmorPiece = {
                   ...pieces[i],
@@ -337,7 +337,7 @@ export function findBestCombination(
             }
 
             // Si pas de grand mod ou si le petit mod est meilleur
-            if (currentMods.small > 0) {
+            if (currentMods.size < modCounts.small) {
               for (const stat of allStats) {
                 const tempPiece: ArmorPiece = {
                   ...pieces[i],
@@ -363,7 +363,11 @@ export function findBestCombination(
                 smallMods: bestFixedModType === 'small' ? [bestFixedModStat] : [],
                 largeMods: bestFixedModType === 'large' ? [bestFixedModStat] : []
               };
-              currentMods[bestFixedModType]--;
+              if (bestFixedModType === 'small') {
+                currentMods.add(bestFixedModStat);
+              } else {
+                currentMods.add(bestFixedModStat);
+              }
               currentStats = calculateTotalStats(pieces);
               currentScore = calculateScore(currentStats, targetStats);
             }
@@ -371,7 +375,7 @@ export function findBestCombination(
         }
 
         // Try to improve stats by adding mods one by one to the other pieces
-        while (currentMods.small > 0 || currentMods.large > 0) {
+        while (currentMods.size < modCounts.small + modCounts.large) {
           let bestModImprovement = -Infinity;
           let bestModPiece = -1;
           let bestModType: 'small' | 'large' | null = null;
@@ -380,7 +384,7 @@ export function findBestCombination(
           for (let i = 0; i < pieces.length - fixedArmorsWithTypes.length; i++) {
             const piece = pieces[i];
             if (piece.smallMods.length === 0 && piece.largeMods.length === 0) {
-              if (currentMods.small > 0) {
+              if (currentMods.size < modCounts.small) {
                 for (const stat of allStats) {
                   const tempPiece: ArmorPiece = {
                     ...piece,
@@ -399,7 +403,7 @@ export function findBestCombination(
                   }
                 }
               }
-              if (currentMods.large > 0) {
+              if (currentMods.size < modCounts.large) {
                 for (const stat of allStats) {
                   const tempPiece: ArmorPiece = {
                     ...piece,
@@ -429,14 +433,22 @@ export function findBestCombination(
               smallMods: [bestModStat],
               largeMods: []
             };
-            currentMods.small--;
+            if (bestModType === 'small') {
+              currentMods.add(bestModStat);
+            } else {
+              currentMods.add(bestModStat);
+            }
           } else if (bestModType === 'large' && bestModStat) {
             pieces[bestModPiece] = {
               ...pieces[bestModPiece],
               smallMods: [],
               largeMods: [bestModStat]
             };
-            currentMods.large--;
+            if (bestModType === 'large') {
+              currentMods.add(bestModStat);
+            } else {
+              currentMods.add(bestModStat);
+            }
           }
 
           currentStats = calculateTotalStats(pieces);
@@ -446,7 +458,7 @@ export function findBestCombination(
         const isTargetAchieved = isTargetStatsAchieved(currentStats, targetStats);
         const result: BestCombination = {
           combination: pieces,
-          remainingMods: currentMods,
+          remainingMods: { small: modCounts.small - currentMods.size, large: modCounts.large - currentMods.size },
           score: currentScore,
           isTargetAchieved
         };

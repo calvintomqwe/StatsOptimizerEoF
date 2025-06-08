@@ -45,4 +45,14 @@ export const TIER_STAT_VALUES: Record<number, TierValues> = {
 export const MOD_VALUES = {
   small: 5,
   large: 10
-}; 
+};
+
+export interface BestCombination {
+  combination: ArmorPiece[];
+  remainingMods: {
+    small: number;
+    large: number;
+  };
+  score: number;
+  isTargetAchieved: boolean;
+} 

@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ArmorPiece, ArmorStats, StatType, TIER_STAT_VALUES, MOD_VALUES } from '../types/armor';
+import { ArmorPiece, ArmorStats, StatType, TIER_STAT_VALUES, MOD_VALUES, BestCombination } from '../types/armor';
 import { findBestCombination, calculateTotalStats } from '../utils/armorCalculator';
-import { ARMOR_PATTERNS } from '../data/patterns';
 
 interface ModCounts {
   small: number;
@@ -31,7 +30,7 @@ export default function StatsForm() {
   });
   const [tier, setTier] = useState<number>(5);
   const [modCounts, setModCounts] = useState<ModCounts>({ small: 0, large: 5 });
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<BestCombination[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [expandedResults, setExpandedResults] = useState<number[]>([]);
   const [showGuide, setShowGuide] = useState(true);
@@ -135,10 +134,6 @@ export default function StatsForm() {
       newArmors[index] = { ...newArmors[index], [field]: value };
     }
     setFixedArmors(newArmors);
-  };
-
-  const resetFixedArmors = () => {
-    setFixedArmors([]);
   };
 
   const handleCustomTierChange = (field: 'main' | 'sub' | 'third', value: string) => {
@@ -255,11 +250,11 @@ export default function StatsForm() {
             <h2 className="text-2xl font-bold mb-4">Please read this before using the tool</h2>
             <div className="space-y-3 text-sm">
               <ul className="list-disc pl-5 space-y-1">
-                <li>This tool is not perfect, it's just there to help you have an idea of which archetype of armor to chase for your build on the first few days of the dlc to prepare for the contest raid. Therefore I won't implement stat tuning since we won't have access to tier 5 before saturday.</li>
+                <li>This tool is not perfect, it&apos;s just there to help you have an idea of which archetype of armor to chase for your build on the first few days of the dlc to prepare for the contest raid. Therefore I won&apos;t implement stat tuning since we won&apos;t have access to tier 5 before saturday.</li>
                 <li>The tool is still under development, so some bugs might appear.</li>
-                <li>The stats used are from the version of EoF that CC played it might be different from the actual stats on launch. Don't hesitate to use custom tiers to suit your needs.</li>
-                <li>This is a very small tool, i just made it for myself and a few friends, so I don't know if it will be of any help to you.</li>
-                <li>I don't claim to be a great developer, so the app might be a bit shit. sorry.</li>
+                <li>The stats used are from the version of EoF that CC played it might be different from the actual stats on launch. Don&apos;t hesitate to use custom tiers to suit your needs.</li>
+                <li>This is a very small tool, i just made it for myself and a few friends, so I don&apos;t know if it will be of any help to you.</li>
+                <li>I don&apos;t claim to be a great developer, so the app might be a bit shit. sorry.</li>
               </ul>
               <p className="mt-2 text-xs text-gray-400">The tool isnt really optimized for mobile, so it might be a bit laggy, and it might not offer the best experience.</p>
             </div>
@@ -725,7 +720,7 @@ export default function StatsForm() {
                               </tr>
                             </thead>
                             <tbody>
-                              {result.combination.map((piece: any, pieceIndex: number) => (
+                              {result.combination.map((piece: ArmorPiece, pieceIndex: number) => (
                                 <tr key={pieceIndex} className="border-t border-gray-700">
                                   <td className="py-2 overflow-visible">
                                     <div className="flex items-center gap-2">
