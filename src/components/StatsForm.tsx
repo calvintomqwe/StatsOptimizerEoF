@@ -55,9 +55,7 @@ export default function StatsForm() {
   const [useCustomTier, setUseCustomTier] = useState(false);
 
   const handleStatChange = (stat: StatType, value: string) => {
-    // Ne garder que les chiffres
     const numericValue = value.replace(/[^0-9]/g, '');
-    // Limiter entre 0 et 200
     const limitedValue = Math.min(Math.max(parseInt(numericValue) || 0, 0), 200).toString();
     setTargetStats(prev => ({ ...prev, [stat]: limitedValue }));
   };
@@ -144,7 +142,7 @@ export default function StatsForm() {
     setCustomTier(prev => ({ ...prev, [field]: limitedValue }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     setIsLoading(true);
     
@@ -198,40 +196,6 @@ export default function StatsForm() {
         : [...prev, index]
     );
   };
-
-  const renderStatInput = (stat: StatType, label: string) => (
-    <div className="mb-4">
-      <label className="block text-sm font-medium text-gray-300 mb-1">
-        {label}
-      </label>
-      <div className="flex items-center space-x-2">
-        <button
-          type="button"
-          onClick={() => handleStatChange(stat, String(Math.max(0, parseInt(targetStats[stat]) - 10)))}
-          className="px-3 py-1 bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
-        >
-          -10
-        </button>
-        <input
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          value={targetStats[stat]}
-          onChange={(e) => handleStatChange(stat, e.target.value)}
-          className={`w-20 px-3 py-2 bg-gray-700 text-gray-300 border border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-center ${
-            parseInt(targetStats[stat]) > 200 ? 'border-2 border-red-500' : ''
-          }`}
-        />
-        <button
-          type="button"
-          onClick={() => handleStatChange(stat, String(parseInt(targetStats[stat]) + 10))}
-          className="px-3 py-1 bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
-        >
-          +10
-        </button>
-      </div>
-    </div>
-  );
 
   const allStats: StatType[] = ['weapon', 'health', 'class', 'grenade', 'melee', 'super'];
 
@@ -669,8 +633,6 @@ export default function StatsForm() {
                 : results.slice(0, 1)
               ).map((result, index) => {
                 const totalStats = calculateTotalStats(result.combination);
-                const sortedStats = Object.entries(totalStats)
-                  .sort(([, a], [, b]) => b - a);
                 const uniquePatternCount = new Set(result.combination.map((p: any) => p.pattern.name)).size;
 
                 const statOrder: StatType[] = ['health', 'melee', 'grenade', 'super', 'class', 'weapon'];
