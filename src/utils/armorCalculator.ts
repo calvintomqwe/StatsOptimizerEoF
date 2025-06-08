@@ -36,7 +36,7 @@ export const calculatePieceStats = (piece: ArmorPiece): Stats => {
 };
 */
 
-export function calculatePieceStats(piece: ArmorPiece): ArmorStats {
+export function calculateSinglePieceStats(piece: ArmorPiece): ArmorStats {
   const stats: ArmorStats = {
     weapon: 5,
     health: 5,
@@ -73,7 +73,7 @@ export function calculatePieceStats(piece: ArmorPiece): ArmorStats {
 
 export function calculateTotalStats(pieces: ArmorPiece[]): ArmorStats {
   return pieces.reduce((total, piece) => {
-    const pieceStats = calculatePieceStats(piece);
+    const pieceStats = calculateSinglePieceStats(piece);
     return {
       weapon: total.weapon + pieceStats.weapon,
       health: total.health + pieceStats.health,
@@ -108,54 +108,6 @@ export function findBestCombination(
   const allStats: StatType[] = ['weapon', 'health', 'class', 'grenade', 'melee', 'super'];
   const results: BestCombination[] = [];
   let bestScore = Infinity;
-
-  // Fonction pour obtenir les valeurs de stats en fonction du tier
-  const getTierValues = (tier: number) => {
-    if (tier === 6) {
-      // Tier personnalisé
-      return {
-        main: 30,
-        sub: 25,
-        third: 20
-      };
-    }
-    return TIER_STAT_VALUES[tier];
-  };
-
-  // Fonction pour calculer les stats d'une pièce
-  const calculatePieceStats = (piece: ArmorPiece): Record<StatType, number> => {
-    const stats: Record<StatType, number> = {
-      weapon: 5,
-      health: 5,
-      class: 5,
-      grenade: 5,
-      melee: 5,
-      super: 5
-    };
-
-    // Si c'est une armure fixe avec des valeurs personnalisées
-    if (piece.pattern.mainStatValue && piece.pattern.subStatValue && piece.pattern.thirdStatValue) {
-      stats[piece.pattern.mainStat] = parseInt(piece.pattern.mainStatValue);
-      stats[piece.pattern.subStat] = parseInt(piece.pattern.subStatValue);
-      stats[piece.thirdStat] = parseInt(piece.pattern.thirdStatValue);
-    } else {
-      // Sinon utiliser les valeurs du tier
-      const tierValues = getTierValues(piece.tier);
-      stats[piece.pattern.mainStat] = tierValues.main;
-      stats[piece.pattern.subStat] = tierValues.sub;
-      stats[piece.thirdStat] = tierValues.third;
-    }
-
-    // Appliquer les mods
-    piece.smallMods.forEach(mod => {
-      stats[mod] += MOD_VALUES.small;
-    });
-    piece.largeMods.forEach(mod => {
-      stats[mod] += MOD_VALUES.large;
-    });
-
-    return stats;
-  };
 
   // Si on a déjà 5 armures fixes, on ne génère pas de nouvelles armures
   if (fixedArmors.length === 5) {
@@ -277,7 +229,8 @@ export function findBestCombination(
           largeMods: []
         };
 
-        const tempStats = calculateTotalStats([tempPiece]);
+        const tempPieces = [tempPiece, ...fixedArmorsWithTypes];
+        const tempStats = calculateTotalStats(tempPieces);
         const score = calculateScore(tempStats, targetStats);
         if (score < bestPieceScore) {
           bestPieceScore = score;

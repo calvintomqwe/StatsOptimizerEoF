@@ -106,7 +106,7 @@ export default function StatsForm() {
     setFixedArmors(fixedArmors.filter((_, i) => i !== index));
   };
 
-  const updateFixedArmor = (index: number, field: string, value: any) => {
+  const updateFixedArmor = (index: number, field: string, value: string | number | boolean | null) => {
     const newArmors = [...fixedArmors];
     if (field === 'letCalculatorChoose') {
       // Si on active "Let calculator choose", on met les stats à null mais on garde les valeurs
@@ -631,7 +631,7 @@ export default function StatsForm() {
               {(results.some(r => r.isTargetAchieved)
                 ? results.filter(r => r.isTargetAchieved)
                 : results.slice(0, 1)
-              ).map((result, index) => {
+              ).map((result: BestCombination, index: number) => {
                 const totalStats = calculateTotalStats(result.combination);
                 const uniquePatternCount = new Set(result.combination.map((p: ArmorPiece) => p.pattern.name)).size;
 
