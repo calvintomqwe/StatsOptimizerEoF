@@ -215,10 +215,10 @@ export default function StatsForm() {
             <div className="space-y-3 text-sm">
               <ul className="list-disc pl-5 space-y-1">
                 <li>This tool is not perfect, it&apos;s just there to help you have an idea of which archetype of armor to chase for your build on the first few days of the dlc to prepare for the contest raid. Therefore I won&apos;t implement stat tuning since we won&apos;t have access to tier 5 before saturday.</li>
-                <li>The tool is still under development, so some bugs might appear.</li>
-                <li>The stats used are from the version of EoF that CC played it might be different from the actual stats on launch. Don&apos;t hesitate to use custom tiers to suit your needs.</li>
+                <li>The tool aim to give you a rough idea of how to reach your target stats in the fastest way possible, and can sometime miss the target, so try to play with the stats to get a desired result.</li>
+                <li>The stats used are from the version of EoF that content creators played, it might be different from the actual stats on launch. Don&apos;t hesitate to use custom tiers to suit your needs.</li>
                 <li>This is a very small tool, i just made it for myself and a few friends, so I don&apos;t know if it will be of any help to you.</li>
-                <li>I don&apos;t claim to be a great developer, so the app might be a bit shit. sorry.</li>
+                <li>I don&apos;t claim to be a great developer, so the app might be a bit shitty. sorry.</li>
               </ul>
               <p className="mt-2 text-xs text-gray-400">The tool isnt really optimized for mobile, so it might be a bit laggy, and it might not offer the best experience.</p>
             </div>
@@ -625,7 +625,7 @@ export default function StatsForm() {
               <h2 className="text-xl font-semibold text-gray-300">
                 {results.some(r => r.isTargetAchieved)
                   ? 'Found combinations that achieve target stats:'
-                  : 'Best possible combination (target stats not fully achievable):'}
+                  : 'target stats not fully achievable try lowering targeted stats(the result might not be optimal):'}
               </h2>
               
               {(results.some(r => r.isTargetAchieved)
