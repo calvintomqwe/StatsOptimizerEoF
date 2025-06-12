@@ -150,6 +150,7 @@ export default function StatsForm() {
       const fixedArmorPieces: ArmorPiece[] = fixedArmors
         .filter(armor => armor.mainStatValue && armor.subStatValue && armor.thirdStatValue)
         .map(armor => {
+          // Pour les armures normales, on crée un pattern personnalisé
           const customPattern = {
             name: 'Custom',
             mainStat: armor.mainStat || 'weapon',
@@ -165,7 +166,12 @@ export default function StatsForm() {
             tier: useCustomTier ? 6 : tier,
             thirdStat: armor.thirdStat || 'weapon',
             smallMods: [],
-            largeMods: []
+            largeMods: [],
+            letCalculatorChoose: armor.letCalculatorChoose,
+            // On ajoute les valeurs renseignées par l'utilisateur
+            mainStatValue: armor.mainStatValue,
+            subStatValue: armor.subStatValue,
+            thirdStatValue: armor.thirdStatValue
           };
         });
 
@@ -214,7 +220,7 @@ export default function StatsForm() {
             <h2 className="text-2xl font-bold mb-4">Please read this before using the tool</h2>
             <div className="space-y-3 text-sm">
               <ul className="list-disc pl-5 space-y-1">
-                <li>This tool is not perfect, it&apos;s just there to help you have an idea of which archetype of armor to chase for your build on the first few days of the dlc to prepare for the contest raid. Therefore I won&apos;t implement stat tuning since we won&apos;t have access to tier 5 before saturday.</li>
+                <li>This tool is not perfect, it&apos;s just there to help you have an idea of which archetype of armor to chase for your build on the first few days of the dlc to prepare for the contest raid. Therefore I won&apos;t implement stat tuning since we probably won&apos;t have access to tier 5 before saturday.</li>
                 <li>The tool aim to give you a rough idea of how to reach your target stats in the fastest way possible, and can sometime miss the target, so try to play with the stats to get a desired result.</li>
                 <li>The stats used are from the version of EoF that content creators played, it might be different from the actual stats on launch. Don&apos;t hesitate to use custom tiers to suit your needs.</li>
                 <li>This is a very small tool, i just made it for myself and a few friends, so I don&apos;t know if it will be of any help to you.</li>
@@ -624,7 +630,9 @@ export default function StatsForm() {
             <div className="lg:mt-0 space-y-4">
               <h2 className="text-xl font-semibold text-gray-300">
                 {results.some(r => r.isTargetAchieved)
-                  ? 'Found combinations that achieve target stats:'
+                  ? (results.length >= 50 
+                    ? 'Found 50 combinations that achieve target stats (limited to 50, try to increase your expectations to get more accurate results):'
+                    : 'Found combinations that achieve target stats:')
                   : 'target stats not fully achievable try lowering targeted stats(the result might not be optimal):'}
               </h2>
               
@@ -699,7 +707,12 @@ export default function StatsForm() {
                                         </button>
                                         <div className={`absolute left-0 ${pieceIndex >= result.combination.length - 2 ? 'bottom-full mb-1' : 'top-full mt-1'} hidden group-hover:block bg-gray-900 p-2 rounded shadow-lg z-50 min-w-[200px]`}>
                                           <p className="text-sm text-gray-300">
-                                            {piece.pattern.mainStatValue ? (
+                                            {piece.letCalculatorChoose ? (
+                                              <>
+                                                Main: {piece.pattern.mainStat} ({piece.mainStatValue})<br />
+                                                Sub: {piece.pattern.subStat} ({piece.subStatValue})
+                                              </>
+                                            ) : piece.pattern.mainStatValue ? (
                                               <>
                                                 Main: {piece.pattern.mainStat} ({piece.pattern.mainStatValue})<br />
                                                 Sub: {piece.pattern.subStat} ({piece.pattern.subStatValue})
@@ -716,7 +729,7 @@ export default function StatsForm() {
                                     </div>
                                   </td>
                                   <td className="py-2 text-gray-300">
-                                    {piece.thirdStat} ({piece.pattern.thirdStatValue || TIER_STAT_VALUES[piece.tier].third})
+                                    {piece.thirdStat} ({piece.letCalculatorChoose ? piece.thirdStatValue : (piece.pattern.thirdStatValue || TIER_STAT_VALUES[piece.tier].third)})
                                   </td>
                                   <td className="py-2 text-gray-300">
                                     {piece.smallMods.length > 0 && (

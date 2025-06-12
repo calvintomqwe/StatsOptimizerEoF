@@ -46,14 +46,13 @@ export function calculateSinglePieceStats(piece: ArmorPiece): ArmorStats {
     super: 5
   };
 
-  // Si c'est une armure avec des valeurs personnalisées
-  if (piece.pattern.mainStatValue && piece.pattern.subStatValue && piece.pattern.thirdStatValue) {
-    // Appliquer les valeurs spécifiées
-    stats[piece.pattern.mainStat] = parseInt(piece.pattern.mainStatValue);
-    stats[piece.pattern.subStat] = parseInt(piece.pattern.subStatValue);
-    stats[piece.thirdStat] = parseInt(piece.pattern.thirdStatValue);
+  // Si c'est une armure en mode "let calculator choose", on utilise directement les valeurs renseignées
+  if (piece.letCalculatorChoose) {
+    stats[piece.pattern.mainStat] = parseInt(piece.mainStatValue || '0');
+    stats[piece.pattern.subStat] = parseInt(piece.subStatValue || '0');
+    stats[piece.thirdStat] = parseInt(piece.thirdStatValue || '0');
   } else {
-    // Sinon, utiliser les valeurs du tier
+    // Pour les armures normales, utiliser les valeurs du tier avec les stats du pattern
     const tierValues = TIER_STAT_VALUES[piece.tier];
     stats[piece.pattern.mainStat] = tierValues.main;
     stats[piece.pattern.subStat] = tierValues.sub;
@@ -99,6 +98,11 @@ interface BestCombination {
   isTargetAchieved: boolean;
 }
 
+function countUniqueArchetypes(pieces: ArmorPiece[]): number {
+  const uniqueArchetypes = new Set(pieces.map(piece => piece.pattern.name));
+  return uniqueArchetypes.size;
+}
+
 export function findBestCombination(
   targetStats: Record<StatType, number>,
   tier: number,
@@ -118,50 +122,60 @@ export function findBestCombination(
 
     // Appliquer les mods sur les armures fixes
     while (currentMods.size < modCounts.small + modCounts.large) {
+      // Trouver la stat la plus éloignée de sa cible
+      let furthestStat: StatType | null = null;
+      let maxDiff = -Infinity;
+      for (const stat of allStats) {
+        const diff = targetStats[stat] - currentStats[stat];
+        if (diff > maxDiff) {
+          maxDiff = diff;
+          furthestStat = stat;
+        }
+      }
+
+      // Si toutes les stats sont au-dessus de leur cible, on arrête
+      if (maxDiff <= 0) break;
+
       let bestModImprovement = -Infinity;
       let bestModPiece = -1;
       let bestModType: 'small' | 'large' | null = null;
-      let bestModStat: StatType | null = null;
 
+      // Essayer d'appliquer un mod sur la stat la plus éloignée
       for (let i = 0; i < pieces.length; i++) {
         const piece = pieces[i];
         if (piece.smallMods.length === 0 && piece.largeMods.length === 0) {
-          if (currentMods.size < modCounts.small) {
-            for (const stat of allStats) {
-              const tempPiece: ArmorPiece = {
-                ...piece,
-                smallMods: [stat],
-                largeMods: []
-              };
-              const tempPieces = [...pieces];
-              tempPieces[i] = tempPiece;
-              const tempStats = calculateTotalStats(tempPieces);
-              const improvement = calculateScore(currentStats, targetStats) - calculateScore(tempStats, targetStats);
-              if (improvement > bestModImprovement) {
-                bestModImprovement = improvement;
-                bestModPiece = i;
-                bestModType = 'small';
-                bestModStat = stat;
-              }
+          // Essayer d'abord un grand mod
+          if (currentMods.size < modCounts.large) {
+            const tempPiece: ArmorPiece = {
+              ...piece,
+              smallMods: [],
+              largeMods: [furthestStat!]
+            };
+            const tempPieces = [...pieces];
+            tempPieces[i] = tempPiece;
+            const tempStats = calculateTotalStats(tempPieces);
+            const improvement = calculateScore(currentStats, targetStats) - calculateScore(tempStats, targetStats);
+            if (improvement > bestModImprovement) {
+              bestModImprovement = improvement;
+              bestModPiece = i;
+              bestModType = 'large';
             }
           }
-          if (currentMods.size < modCounts.large) {
-            for (const stat of allStats) {
-              const tempPiece: ArmorPiece = {
-                ...piece,
-                smallMods: [],
-                largeMods: [stat]
-              };
-              const tempPieces = [...pieces];
-              tempPieces[i] = tempPiece;
-              const tempStats = calculateTotalStats(tempPieces);
-              const improvement = calculateScore(currentStats, targetStats) - calculateScore(tempStats, targetStats);
-              if (improvement > bestModImprovement) {
-                bestModImprovement = improvement;
-                bestModPiece = i;
-                bestModType = 'large';
-                bestModStat = stat;
-              }
+          // Si pas de grand mod ou si le petit mod est meilleur
+          if (currentMods.size < modCounts.small) {
+            const tempPiece: ArmorPiece = {
+              ...piece,
+              smallMods: [furthestStat!],
+              largeMods: []
+            };
+            const tempPieces = [...pieces];
+            tempPieces[i] = tempPiece;
+            const tempStats = calculateTotalStats(tempPieces);
+            const improvement = calculateScore(currentStats, targetStats) - calculateScore(tempStats, targetStats);
+            if (improvement > bestModImprovement) {
+              bestModImprovement = improvement;
+              bestModPiece = i;
+              bestModType = 'small';
             }
           }
         }
@@ -169,20 +183,20 @@ export function findBestCombination(
 
       if (bestModImprovement <= 0) break;
 
-      if (bestModType === 'small' && bestModStat) {
+      if (bestModType === 'small') {
         pieces[bestModPiece] = {
           ...pieces[bestModPiece],
-          smallMods: [bestModStat],
+          smallMods: [furthestStat!],
           largeMods: []
         };
-        currentMods.add(bestModStat);
-      } else if (bestModType === 'large' && bestModStat) {
+        currentMods.add(furthestStat!);
+      } else if (bestModType === 'large') {
         pieces[bestModPiece] = {
           ...pieces[bestModPiece],
           smallMods: [],
-          largeMods: [bestModStat]
+          largeMods: [furthestStat!]
         };
-        currentMods.add(bestModStat);
+        currentMods.add(furthestStat!);
       }
 
       currentStats = calculateTotalStats(pieces);
@@ -190,61 +204,21 @@ export function findBestCombination(
     }
 
     const isTargetAchieved = isTargetStatsAchieved(currentStats, targetStats);
-    return [{
+    const result: BestCombination = {
       combination: pieces,
       remainingMods: { small: modCounts.small - currentMods.size, large: modCounts.large - currentMods.size },
       score: currentScore,
       isTargetAchieved
-    }];
-  }
+    };
 
-  // Pour chaque armure fixe avec des valeurs mais sans types, on va essayer différentes combinaisons de types
-  const fixedArmorsWithTypes: ArmorPiece[] = [];
-  for (const fixedArmor of fixedArmors) {
-    if (fixedArmor.pattern.mainStat === 'weapon' && fixedArmor.pattern.subStat === 'health') {
-      // C'est une armure avec des valeurs mais sans types spécifiés
-      const mainValue = parseInt(fixedArmor.pattern.mainStatValue || '0');
-      const subValue = parseInt(fixedArmor.pattern.subStatValue || '0');
-      const thirdValue = parseInt(fixedArmor.pattern.thirdStatValue || '0');
-
-      // Essayer toutes les combinaisons possibles de types pour ces valeurs
-      let bestPiece: ArmorPiece | null = null;
-      let bestPieceScore = Infinity;
-
-      // Utiliser uniquement les patterns existants
-      for (const pattern of ARMOR_PATTERNS) {
-        const tempPiece: ArmorPiece = {
-          pattern: {
-            name: pattern.name,
-            mainStat: pattern.mainStat,
-            subStat: pattern.subStat,
-            possibleThirdStats: pattern.possibleThirdStats,
-            mainStatValue: mainValue.toString(),
-            subStatValue: subValue.toString(),
-            thirdStatValue: thirdValue.toString()
-          },
-          tier: fixedArmor.tier,
-          thirdStat: pattern.possibleThirdStats[0],
-          smallMods: [],
-          largeMods: []
-        };
-
-        const tempPieces = [tempPiece, ...fixedArmorsWithTypes];
-        const tempStats = calculateTotalStats(tempPieces);
-        const score = calculateScore(tempStats, targetStats);
-        if (score < bestPieceScore) {
-          bestPieceScore = score;
-          bestPiece = tempPiece;
-        }
-      }
-
-      if (bestPiece) {
-        fixedArmorsWithTypes.push(bestPiece);
-      }
-    } else {
-      // C'est une armure avec des types spécifiés, on la garde telle quelle
-      fixedArmorsWithTypes.push(fixedArmor);
+    if (isTargetAchieved) {
+      results.push(result);
+    } else if (currentScore < bestScore) {
+      bestScore = currentScore;
+      results[0] = result;
     }
+
+    return results;
   }
 
   // Sort patterns by how well they match the target stats
@@ -254,237 +228,209 @@ export function findBestCombination(
     return aScore - bScore;
   });
 
-  // Set pour suivre les groupes de patterns déjà trouvés
-  const foundPatternGroups = new Set<string>();
+  // Map pour stocker les combinaisons déjà testées
+  const testedCombinations = new Map<string, boolean>();
 
-  // Try with increasing number of unique patterns
-  const numPiecesNeeded = 5 - fixedArmorsWithTypes.length;
-  for (let numPatterns = 1; numPatterns <= numPiecesNeeded; numPatterns++) {
-    const patterns = sortedPatterns.slice(0, numPatterns);
-    const combinations = generateCombinationsWithDuplicates(patterns, numPiecesNeeded);
+  // Fonction pour générer une clé unique pour une combinaison d'armures
+  function generateCombinationKey(pieces: ArmorPiece[]): string {
+    return pieces.map(p => `${p.pattern.name}-${p.thirdStat}`).sort().join('|');
+  }
 
-    const startTime = Date.now();
-    const TIME_LIMIT = 5000;
+  // Fonction pour générer toutes les combinaisons possibles
+  function generateAllCombinations(patterns: typeof ARMOR_PATTERNS, numPieces: number): ArmorPiece[][] {
+    const combinations: ArmorPiece[][] = [];
+    const current: ArmorPiece[] = [];
 
-    for (const combination of combinations) {
-      if (Date.now() - startTime > TIME_LIMIT) {
-        console.log('Time limit reached for current pattern count');
-        break;
+    // On ne garde que les armures fixes normales (pas en mode "let calc choose")
+    const normalFixedArmors = fixedArmors.filter(armor => !armor.letCalculatorChoose);
+
+    function generate(index: number) {
+      if (index === numPieces) {
+        const key = generateCombinationKey(current);
+        if (!testedCombinations.has(key)) {
+          testedCombinations.set(key, true);
+          // Ajouter les armures fixes normales à la fin
+          const fullCombination = [...current, ...normalFixedArmors];
+          combinations.push(fullCombination);
+        }
+        return;
       }
 
-      // Générer la clé du groupe de patterns (ordre ignoré)
-      const patternGroupKey = combination.map(p => p.name).sort().join(',');
-      if (foundPatternGroups.has(patternGroupKey)) {
-        continue; // On a déjà trouvé une solution pour ce groupe
-      }
-
-      const thirdStatsCombinations = generateThirdStatsCombinations(allStats, combination, targetStats);
-      let foundForThisGroup = false;
-      for (const thirdStats of thirdStatsCombinations) {
-        if (foundForThisGroup) break;
-        const pieces: ArmorPiece[] = combination.map((pattern, index) => ({
-          pattern,
-          tier,
-          thirdStat: thirdStats[index],
-          smallMods: [] as StatType[],
-          largeMods: [] as StatType[]
-        }));
-
-        // Ajouter les armures fixes avec leurs types optimisés
-        pieces.push(...fixedArmorsWithTypes);
-
-        let currentStats = calculateTotalStats(pieces);
-        let currentScore = calculateScore(currentStats, targetStats);
-        const currentMods = new Set<string>();
-
-        // Si on a des armures fixes, on essaie d'abord d'appliquer un mod sur chacune
-        if (fixedArmorsWithTypes.length > 0 && (currentMods.size < modCounts.small + modCounts.large)) {
-          for (let i = pieces.length - fixedArmorsWithTypes.length; i < pieces.length; i++) {
-            let bestFixedModImprovement = -Infinity;
-            let bestFixedModType: 'small' | 'large' | null = null;
-            let bestFixedModStat: StatType | null = null;
-
-            // Essayer d'abord un grand mod
-            if (currentMods.size < modCounts.large) {
-              for (const stat of allStats) {
-                const tempPiece: ArmorPiece = {
-                  ...pieces[i],
-                  smallMods: [],
-                  largeMods: [stat]
-                };
-                const tempPieces = [...pieces];
-                tempPieces[i] = tempPiece;
-                const tempStats = calculateTotalStats(tempPieces);
-                const improvement = calculateScore(currentStats, targetStats) - calculateScore(tempStats, targetStats);
-                if (improvement > bestFixedModImprovement) {
-                  bestFixedModImprovement = improvement;
-                  bestFixedModType = 'large';
-                  bestFixedModStat = stat;
-                }
-              }
-            }
-
-            // Si pas de grand mod ou si le petit mod est meilleur
-            if (currentMods.size < modCounts.small) {
-              for (const stat of allStats) {
-                const tempPiece: ArmorPiece = {
-                  ...pieces[i],
-                  smallMods: [stat],
-                  largeMods: []
-                };
-                const tempPieces = [...pieces];
-                tempPieces[i] = tempPiece;
-                const tempStats = calculateTotalStats(tempPieces);
-                const improvement = calculateScore(currentStats, targetStats) - calculateScore(tempStats, targetStats);
-                if (improvement > bestFixedModImprovement) {
-                  bestFixedModImprovement = improvement;
-                  bestFixedModType = 'small';
-                  bestFixedModStat = stat;
-                }
-              }
-            }
-
-            // Appliquer le meilleur mod à l'armure fixe
-            if (bestFixedModType && bestFixedModStat) {
-              pieces[i] = {
-                ...pieces[i],
-                smallMods: bestFixedModType === 'small' ? [bestFixedModStat] : [],
-                largeMods: bestFixedModType === 'large' ? [bestFixedModStat] : []
-              };
-              if (bestFixedModType === 'small') {
-                currentMods.add(bestFixedModStat);
-              } else {
-                currentMods.add(bestFixedModStat);
-              }
-              currentStats = calculateTotalStats(pieces);
-              currentScore = calculateScore(currentStats, targetStats);
+      // Si c'est une armure en mode "let calculator choose", on utilise les valeurs renseignées
+      if (fixedArmors[index]?.letCalculatorChoose) {
+        const fixedArmor = fixedArmors[index];
+        for (const pattern of patterns) {
+          for (const thirdStat of pattern.possibleThirdStats) {
+            if (thirdStat !== pattern.mainStat && thirdStat !== pattern.subStat) {
+              current.push({
+                pattern,
+                tier,
+                thirdStat,
+                smallMods: [],
+                largeMods: [],
+                letCalculatorChoose: true,
+                mainStatValue: fixedArmor.mainStatValue,
+                subStatValue: fixedArmor.subStatValue,
+                thirdStatValue: fixedArmor.thirdStatValue
+              });
+              generate(index + 1);
+              current.pop();
             }
           }
         }
-
-        // Try to improve stats by adding mods one by one to the other pieces
-        while (currentMods.size < modCounts.small + modCounts.large) {
-          let bestModImprovement = -Infinity;
-          let bestModPiece = -1;
-          let bestModType: 'small' | 'large' | null = null;
-          let bestModStat: StatType | null = null;
-
-          for (let i = 0; i < pieces.length - fixedArmorsWithTypes.length; i++) {
-            const piece = pieces[i];
-            if (piece.smallMods.length === 0 && piece.largeMods.length === 0) {
-              if (currentMods.size < modCounts.small) {
-                for (const stat of allStats) {
-                  const tempPiece: ArmorPiece = {
-                    ...piece,
-                    smallMods: [stat],
-                    largeMods: []
-                  };
-                  const tempPieces = [...pieces];
-                  tempPieces[i] = tempPiece;
-                  const tempStats = calculateTotalStats(tempPieces);
-                  const improvement = calculateScore(currentStats, targetStats) - calculateScore(tempStats, targetStats);
-                  if (improvement > bestModImprovement) {
-                    bestModImprovement = improvement;
-                    bestModPiece = i;
-                    bestModType = 'small';
-                    bestModStat = stat;
-                  }
-                }
-              }
-              if (currentMods.size < modCounts.large) {
-                for (const stat of allStats) {
-                  const tempPiece: ArmorPiece = {
-                    ...piece,
-                    smallMods: [],
-                    largeMods: [stat]
-                  };
-                  const tempPieces = [...pieces];
-                  tempPieces[i] = tempPiece;
-                  const tempStats = calculateTotalStats(tempPieces);
-                  const improvement = calculateScore(currentStats, targetStats) - calculateScore(tempStats, targetStats);
-                  if (improvement > bestModImprovement) {
-                    bestModImprovement = improvement;
-                    bestModPiece = i;
-                    bestModType = 'large';
-                    bestModStat = stat;
-                  }
-                }
-              }
+      } else {
+        // Pour les armures normales, on utilise le pattern tel quel
+        for (const pattern of patterns) {
+          for (const thirdStat of pattern.possibleThirdStats) {
+            if (thirdStat !== pattern.mainStat && thirdStat !== pattern.subStat) {
+              current.push({
+                pattern,
+                tier,
+                thirdStat,
+                smallMods: [],
+                largeMods: []
+              });
+              generate(index + 1);
+              current.pop();
             }
           }
+        }
+      }
+    }
 
-          if (bestModImprovement <= 0) break;
+    generate(0);
+    return combinations;
+  }
 
-          if (bestModType === 'small' && bestModStat) {
-            pieces[bestModPiece] = {
-              ...pieces[bestModPiece],
-              smallMods: [bestModStat],
+  // Générer toutes les combinaisons possibles
+  // On compte les armures fixes normales et on ajoute le nombre d'armures en mode "let calculator choose"
+  const numPiecesNeeded = 5 - fixedArmors.filter(armor => !armor.letCalculatorChoose).length;
+  const allCombinations = generateAllCombinations(sortedPatterns, numPiecesNeeded);
+
+  // Tester chaque combinaison
+  for (const combination of allCombinations) {
+    const pieces = [...combination];
+    let currentStats = calculateTotalStats(pieces);
+    let currentScore = calculateScore(currentStats, targetStats);
+    const currentMods = new Set<string>();
+    let smallModsUsed = 0;
+    let largeModsUsed = 0;
+
+    // Appliquer les mods sur toutes les armures
+    while (smallModsUsed + largeModsUsed < modCounts.small + modCounts.large) {
+      // Trouver la stat la plus éloignée de sa cible
+      let furthestStat: StatType | null = null;
+      let maxDiff = -Infinity;
+      for (const stat of allStats) {
+        const diff = targetStats[stat] - currentStats[stat];
+        if (diff > maxDiff) {
+          maxDiff = diff;
+          furthestStat = stat;
+        }
+      }
+
+      // Si toutes les stats sont au-dessus de leur cible, on arrête
+      if (maxDiff <= 0) break;
+
+      let bestModImprovement = -Infinity;
+      let bestModPiece = -1;
+      let bestModType: 'small' | 'large' | null = null;
+
+      // Essayer d'appliquer un mod sur la stat la plus éloignée
+      for (let i = 0; i < pieces.length; i++) {
+        const piece = pieces[i];
+        if (piece.smallMods.length === 0 && piece.largeMods.length === 0) {
+          // Essayer d'abord un petit mod si on peut atteindre la cible avec
+          if (smallModsUsed < modCounts.small && maxDiff <= MOD_VALUES.small) {
+            const tempPiece: ArmorPiece = {
+              ...piece,
+              smallMods: [furthestStat!],
               largeMods: []
             };
-            if (bestModType === 'small') {
-              currentMods.add(bestModStat);
-            } else {
-              currentMods.add(bestModStat);
-            }
-          } else if (bestModType === 'large' && bestModStat) {
-            pieces[bestModPiece] = {
-              ...pieces[bestModPiece],
-              smallMods: [],
-              largeMods: [bestModStat]
-            };
-            if (bestModType === 'large') {
-              currentMods.add(bestModStat);
-            } else {
-              currentMods.add(bestModStat);
+            const tempPieces = [...pieces];
+            tempPieces[i] = tempPiece;
+            const tempStats = calculateTotalStats(tempPieces);
+            const improvement = calculateScore(currentStats, targetStats) - calculateScore(tempStats, targetStats);
+            if (improvement > bestModImprovement) {
+              bestModImprovement = improvement;
+              bestModPiece = i;
+              bestModType = 'small';
             }
           }
-
-          currentStats = calculateTotalStats(pieces);
-          currentScore = calculateScore(currentStats, targetStats);
-        }
-
-        const isTargetAchieved = isTargetStatsAchieved(currentStats, targetStats);
-        const result: BestCombination = {
-          combination: pieces,
-          remainingMods: { small: modCounts.small - currentMods.size, large: modCounts.large - currentMods.size },
-          score: currentScore,
-          isTargetAchieved
-        };
-
-        if (isTargetAchieved) {
-          results.push(result);
-          foundPatternGroups.add(patternGroupKey);
-          foundForThisGroup = true;
-          break; // On arrête pour ce groupe dès qu'on trouve une solution
-        } else if (currentScore < bestScore) {
-          bestScore = currentScore;
-          results[0] = result;
+          // Si on ne peut pas atteindre la cible avec un petit mod ou si on n'a plus de petits mods
+          else if (largeModsUsed < modCounts.large) {
+            const tempPiece: ArmorPiece = {
+              ...piece,
+              smallMods: [],
+              largeMods: [furthestStat!]
+            };
+            const tempPieces = [...pieces];
+            tempPieces[i] = tempPiece;
+            const tempStats = calculateTotalStats(tempPieces);
+            const improvement = calculateScore(currentStats, targetStats) - calculateScore(tempStats, targetStats);
+            if (improvement > bestModImprovement) {
+              bestModImprovement = improvement;
+              bestModPiece = i;
+              bestModType = 'large';
+            }
+          }
         }
       }
+
+      if (bestModImprovement <= 0) break;
+
+      if (bestModType === 'small') {
+        pieces[bestModPiece] = {
+          ...pieces[bestModPiece],
+          smallMods: [furthestStat!],
+          largeMods: []
+        };
+        currentMods.add(furthestStat!);
+        smallModsUsed++;
+      } else if (bestModType === 'large') {
+        pieces[bestModPiece] = {
+          ...pieces[bestModPiece],
+          smallMods: [],
+          largeMods: [furthestStat!]
+        };
+        currentMods.add(furthestStat!);
+        largeModsUsed++;
+      }
+
+      currentStats = calculateTotalStats(pieces);
+      currentScore = calculateScore(currentStats, targetStats);
     }
 
-    // Si on a trouvé des résultats qui atteignent les stats cibles, on arrête la recherche
-    if (results.some(r => r.isTargetAchieved)) {
-      break;
+    const isTargetAchieved = isTargetStatsAchieved(currentStats, targetStats);
+    const result: BestCombination = {
+      combination: pieces,
+      remainingMods: { 
+        small: modCounts.small - smallModsUsed, 
+        large: modCounts.large - largeModsUsed 
+      },
+      score: currentScore,
+      isTargetAchieved
+    };
+
+    if (isTargetAchieved) {
+      results.push(result);
+      // Si on a trouvé 50 combinaisons qui atteignent les stats cibles, on arrête
+      if (results.length >= 50) {
+        break;
+      }
+    } else if (currentScore < bestScore) {
+      bestScore = currentScore;
+      results[0] = result;
     }
   }
 
-  // Retourner uniquement les résultats uniques par combinaison de patterns (ordre ignoré)
-  const uniqueResultsMap = new Map<string, BestCombination>();
-  for (const result of results) {
-    const patternNames = result.combination.map(piece => piece.pattern.name).sort();
-    const key = patternNames.join(',');
-    if (!uniqueResultsMap.has(key)) {
-      uniqueResultsMap.set(key, result);
+  // Trier les résultats par nombre d'archetypes puis par score
+  return results.sort((a, b) => {
+    const aArchetypes = countUniqueArchetypes(a.combination);
+    const bArchetypes = countUniqueArchetypes(b.combination);
+    if (aArchetypes !== bArchetypes) {
+      return aArchetypes - bArchetypes;
     }
-  }
-  const uniqueResults = Array.from(uniqueResultsMap.values());
-
-  // Trier par nombre de patterns différents utilisés (ordre ascendant), puis par score
-  return uniqueResults.sort((a, b) => {
-    const aUnique = new Set(a.combination.map(p => p.pattern.name)).size;
-    const bUnique = new Set(b.combination.map(p => p.pattern.name)).size;
-    if (aUnique !== bUnique) return aUnique - bUnique;
     return a.score - b.score;
   });
 }
@@ -511,72 +457,4 @@ function calculatePatternScore(pattern: typeof ARMOR_PATTERNS[0], targetStats: A
   const mainStatValue = targetStats[pattern.mainStat];
   const subStatValue = targetStats[pattern.subStat];
   return -(mainStatValue + subStatValue); // Negative because we want higher values first
-}
-
-function generateCombinationsWithDuplicates<T>(items: T[], length: number): T[][] {
-  if (length === 0) return [[]];
-  if (items.length === 0) return [];
-
-  const combinations: T[][] = [];
-  const current: T[] = [];
-
-  function generate(index: number) {
-    if (index === length) {
-      combinations.push([...current]);
-      return;
-    }
-
-    for (const item of items) {
-      current.push(item);
-      generate(index + 1);
-      current.pop();
-    }
-  }
-
-  generate(0);
-  return combinations;
-}
-
-function generateThirdStatsCombinations(allStats: StatType[], patterns: typeof ARMOR_PATTERNS, targetStats: ArmorStats): StatType[][] {
-  const combinations: StatType[][] = [];
-  const current: StatType[] = [];
-
-  // Trier les stats par ordre décroissant de leur valeur cible
-  const sortedStats = [...allStats].sort((a, b) => targetStats[b] - targetStats[a]);
-
-  function generate(index: number) {
-    if (index === patterns.length) {
-      combinations.push([...current]);
-      return;
-    }
-
-    const pattern = patterns[index];
-    // Filtrer les stats disponibles en excluant mainStat et subStat
-    const availableStats = sortedStats.filter(stat => 
-      stat !== pattern.mainStat && stat !== pattern.subStat
-    );
-
-    // Si la stat cible est à 0, on essaie d'abord les stats non nulles
-    const nonZeroStats = availableStats.filter(stat => targetStats[stat] > 0);
-    const zeroStats = availableStats.filter(stat => targetStats[stat] === 0);
-
-    // Essayer d'abord les stats non nulles
-    for (const stat of nonZeroStats) {
-      current.push(stat);
-      generate(index + 1);
-      current.pop();
-    }
-
-    // Si on n'a pas assez de stats non nulles, utiliser les stats nulles
-    if (nonZeroStats.length < patterns.length - index) {
-      for (const stat of zeroStats) {
-        current.push(stat);
-        generate(index + 1);
-        current.pop();
-      }
-    }
-  }
-
-  generate(0);
-  return combinations;
 } 

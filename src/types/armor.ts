@@ -17,6 +17,10 @@ export interface ArmorPiece {
   thirdStat: StatType;
   smallMods: StatType[];
   largeMods: StatType[];
+  letCalculatorChoose?: boolean;
+  mainStatValue?: string;
+  subStatValue?: string;
+  thirdStatValue?: string;
 }
 
 export interface ArmorStats {
