@@ -184,12 +184,22 @@ export function findBestCombination(
 
     if (isTargetAchieved) {
       results.push(result);
-    } else if (currentScore < bestScore) {
+      // Si on a trouvé 50 combinaisons qui atteignent les stats cibles, on arrête
+      if (results.length >= 50) {
+        return results.sort((a, b) => {
+          const aArchetypes = countUniqueArchetypes(a.combination);
+          const bArchetypes = countUniqueArchetypes(b.combination);
+          if (aArchetypes !== bArchetypes) {
+            return aArchetypes - bArchetypes;
+          }
+          return a.score - b.score;
+        });
+      }
+    } else if (currentScore < bestScore && results.length === 0) {
+      // On ne garde que la meilleure combinaison invalide si on n'a pas encore de résultats valides
       bestScore = currentScore;
       results[0] = result;
     }
-
-    return results;
   }
 
   // Sort patterns by how well they match the target stats
@@ -216,9 +226,6 @@ export function findBestCombination(
     const letCalcChooseArmors = fixedArmors.filter(armor => armor.letCalculatorChoose);
     const normalFixedArmors = fixedArmors.filter(armor => !armor.letCalculatorChoose);
 
-    // Filtrer les stats ciblées à 0 pour les exclure des troisième stats
-    const excludedThirdStats = allStats.filter(stat => targetStats[stat] === 0);
-
     function generate(index: number) {
       if (index === numPieces) {
         const key = generateCombinationKey(current);
@@ -242,9 +249,7 @@ export function findBestCombination(
         const fixedArmor = letCalcChooseArmors[index];
         for (const pattern of patterns) {
           for (const thirdStat of pattern.possibleThirdStats) {
-            if (thirdStat !== pattern.mainStat && 
-                thirdStat !== pattern.subStat && 
-                !excludedThirdStats.includes(thirdStat)) {
+            if (thirdStat !== pattern.mainStat && thirdStat !== pattern.subStat) {
               current.push({
                 pattern,
                 tier,
@@ -265,9 +270,7 @@ export function findBestCombination(
         // Pour les armures normales, on utilise le pattern tel quel
         for (const pattern of patterns) {
           for (const thirdStat of pattern.possibleThirdStats) {
-            if (thirdStat !== pattern.mainStat && 
-                thirdStat !== pattern.subStat && 
-                !excludedThirdStats.includes(thirdStat)) {
+            if (thirdStat !== pattern.mainStat && thirdStat !== pattern.subStat) {
               current.push({
                 pattern,
                 tier,
@@ -403,9 +406,17 @@ export function findBestCombination(
       results.push(result);
       // Si on a trouvé 50 combinaisons qui atteignent les stats cibles, on arrête
       if (results.length >= 50) {
-        break;
+        return results.sort((a, b) => {
+          const aArchetypes = countUniqueArchetypes(a.combination);
+          const bArchetypes = countUniqueArchetypes(b.combination);
+          if (aArchetypes !== bArchetypes) {
+            return aArchetypes - bArchetypes;
+          }
+          return a.score - b.score;
+        });
       }
-    } else if (currentScore < bestScore) {
+    } else if (currentScore < bestScore && results.length === 0) {
+      // On ne garde que la meilleure combinaison invalide si on n'a pas encore de résultats valides
       bestScore = currentScore;
       results[0] = result;
     }
