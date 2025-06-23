@@ -110,7 +110,7 @@ export default function PinnedCombinations() {
           </div>
         </div>
 
-        {/* Modal d'import */}
+        {/* Modal d'import pour le cas vide */}
         {showImportModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-gray-800 p-6 rounded-lg max-w-2xl w-full mx-4">
@@ -329,6 +329,48 @@ export default function PinnedCombinations() {
           );
         })}
       </div>
+
+      {/* Modal d'import - affiché dans tous les cas */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 p-6 rounded-lg max-w-2xl w-full mx-4">
+            <h3 className="text-xl font-bold text-white mb-4">Import Combinations</h3>
+            <textarea
+              value={importJson}
+              onChange={(e) => setImportJson(e.target.value)}
+              placeholder="Paste your JSON here..."
+              className="w-full h-64 bg-gray-700 text-white p-4 rounded resize-none"
+            />
+            {importMessage && (
+              <div className={`mt-2 p-2 rounded ${
+                importMessage.includes('successfully') 
+                  ? 'bg-green-900 text-green-200' 
+                  : 'bg-red-900 text-red-200'
+              }`}>
+                {importMessage}
+              </div>
+            )}
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => {
+                  setShowImportModal(false);
+                  setImportJson('');
+                  setImportMessage('');
+                }}
+                className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleImport}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+              >
+                Import
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 
