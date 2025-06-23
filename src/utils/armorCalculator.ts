@@ -18,7 +18,7 @@ export function calculateSinglePieceStats(piece: ArmorPiece): ArmorStats {
     stats[piece.thirdStat] = parseInt(piece.thirdStatValue || '0');
   } else {
     // Pour les armures normales, utiliser les valeurs du tier avec les stats du pattern
-    const tierValues = TIER_STAT_VALUES[piece.tier];
+    const tierValues = TIER_STAT_VALUES[piece.tier] || TIER_STAT_VALUES[5];
     stats[piece.pattern.mainStat] = tierValues.main;
     stats[piece.pattern.subStat] = tierValues.sub;
     stats[piece.thirdStat] = tierValues.third;
@@ -72,11 +72,150 @@ export function findBestCombination(
   targetStats: Record<StatType, number>,
   tier: number,
   modCounts: { small: number; large: number },
-  fixedArmors: ArmorPiece[] = []
+  fixedArmors: ArmorPiece[] = [],
+  factorizeSolutions: boolean = true
+): BestCombination[] {
+  // Séparer les armures fixes par type
+  const letCalcChooseArmors = fixedArmors.filter(armor => armor.letCalculatorChoose);
+  const exoticArmors = letCalcChooseArmors.filter(armor => armor.isExotic);
+
+  // Si on a des exotiques en mode "let calculator choose", faire un calcul pour chaque pattern
+  if (exoticArmors.length > 0) {
+    const allResults: BestCombination[] = [];
+    
+    for (const exoticArmor of exoticArmors) {
+      for (const pattern of ARMOR_PATTERNS) {
+        // Fonction pour filtrer les 3ème stats en fonction des stats cibles
+        function getValidThirdStats(pattern: typeof ARMOR_PATTERNS[0]): StatType[] {
+          const validStats = pattern.possibleThirdStats.filter(stat => 
+            stat !== pattern.mainStat && 
+            stat !== pattern.subStat && 
+            targetStats[stat] > 0
+          );
+          
+          // Si aucune stat valide n'est trouvée, retourner toutes les stats possibles
+          if (validStats.length === 0) {
+            return pattern.possibleThirdStats.filter(stat => 
+              stat !== pattern.mainStat && 
+              stat !== pattern.subStat
+            );
+          }
+          
+          return validStats;
+        }
+
+        const validThirdStats = getValidThirdStats(pattern);
+        
+        for (const thirdStat of validThirdStats) {
+          // Créer une copie des armures fixes avec l'exotique fixé sur ce pattern et cette troisième stat
+          const modifiedFixedArmors = fixedArmors.map(armor => {
+            if (armor === exoticArmor) {
+              return {
+                ...armor,
+                pattern: {
+                  name: pattern.name,
+                  mainStat: pattern.mainStat,
+                  subStat: pattern.subStat,
+                  possibleThirdStats: pattern.possibleThirdStats,
+                  mainStatValue: armor.mainStatValue,
+                  subStatValue: armor.subStatValue,
+                  thirdStatValue: armor.thirdStatValue
+                },
+                thirdStat: thirdStat,
+                letCalculatorChoose: false // On fixe le pattern et la troisième stat
+              };
+            }
+            return armor;
+          });
+
+          // Faire le calcul avec cette configuration
+          const patternResults = findBestCombinationInternal(
+            targetStats,
+            tier,
+            modCounts,
+            modifiedFixedArmors,
+            factorizeSolutions
+          );
+
+          // Ajouter les résultats
+          allResults.push(...patternResults);
+        }
+      }
+    }
+
+    // Trier et dédupliquer les résultats
+    const uniqueResults = allResults.filter((result, index, self) => 
+      index === self.findIndex(r => 
+        JSON.stringify(r.combination.map(p => ({ name: p.pattern.name, thirdStat: p.thirdStat }))) === 
+        JSON.stringify(result.combination.map(p => ({ name: p.pattern.name, thirdStat: p.thirdStat })))
+      )
+    );
+
+    return uniqueResults.sort((a, b) => {
+      const aArchetypes = countUniqueArchetypes(a.combination);
+      const bArchetypes = countUniqueArchetypes(b.combination);
+      if (aArchetypes !== bArchetypes) {
+        return aArchetypes - bArchetypes;
+      }
+      return a.score - b.score;
+    });
+  }
+
+  // Sinon, utiliser la logique normale
+  return findBestCombinationInternal(targetStats, tier, modCounts, fixedArmors, factorizeSolutions);
+}
+
+function findBestCombinationInternal(
+  targetStats: Record<StatType, number>,
+  tier: number,
+  modCounts: { small: number; large: number },
+  fixedArmors: ArmorPiece[] = [],
+  factorizeSolutions: boolean = true
 ): BestCombination[] {
   const allStats: StatType[] = ['weapon', 'health', 'class', 'grenade', 'melee', 'super'];
   const results: BestCombination[] = [];
-  let bestScore = Infinity;
+  let bestInvalidCombination: BestCombination | null = null;
+
+  // Set pour stocker les solutions déjà trouvées (pour la factorisation)
+  const existingSolutions = new Set<string>();
+
+  // Fonction pour générer une clé unique pour une solution
+  function generateSolutionKey(combination: ArmorPiece[], totalStats: ArmorStats): string {
+    if (!factorizeSolutions) return '';
+    
+    // Créer une clé basée sur les stats totales et les archetypes utilisés
+    // Pour les armures en mode "let calculator choose", on utilise les valeurs réelles
+    const archetypes = combination.map(p => {
+      if (p.letCalculatorChoose && !p.isExotic) {
+        // Pour les armures "let calculator choose" non-exotiques, on inclut les valeurs dans l'archetype
+        return `${p.pattern.name}_${p.mainStatValue}_${p.subStatValue}_${p.thirdStatValue}`;
+      }
+      return p.pattern.name;
+    }).sort();
+    
+    const statsKey = Object.entries(totalStats)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([stat, value]) => `${stat}:${value}`)
+      .join('|');
+    
+    return `${statsKey}|${archetypes.join('|')}`;
+  }
+
+  // Fonction pour vérifier si une solution est déjà présente
+  function isSolutionDuplicate(combination: ArmorPiece[], totalStats: ArmorStats): boolean {
+    if (!factorizeSolutions) return false;
+    
+    const key = generateSolutionKey(combination, totalStats);
+    return existingSolutions.has(key);
+  }
+
+  // Fonction pour ajouter une solution à la liste des solutions existantes
+  function addSolutionToExisting(combination: ArmorPiece[], totalStats: ArmorStats): void {
+    if (!factorizeSolutions) return;
+    
+    const key = generateSolutionKey(combination, totalStats);
+    existingSolutions.add(key);
+  }
 
   // Si on a déjà 5 armures fixes, on ne génère pas de nouvelles armures
   if (fixedArmors.length === 5) {
@@ -183,22 +322,13 @@ export function findBestCombination(
     };
 
     if (isTargetAchieved) {
-      results.push(result);
-      // Si on a trouvé 50 combinaisons qui atteignent les stats cibles, on arrête
-      if (results.length >= 50) {
-        return results.sort((a, b) => {
-          const aArchetypes = countUniqueArchetypes(a.combination);
-          const bArchetypes = countUniqueArchetypes(b.combination);
-          if (aArchetypes !== bArchetypes) {
-            return aArchetypes - bArchetypes;
-          }
-          return a.score - b.score;
-        });
+      // Vérifier si cette solution n'est pas un doublon
+      if (!isSolutionDuplicate(pieces, currentStats)) {
+        results.push(result);
+        addSolutionToExisting(pieces, currentStats);
       }
-    } else if (currentScore < bestScore && results.length === 0) {
-      // On ne garde que la meilleure combinaison invalide si on n'a pas encore de résultats valides
-      bestScore = currentScore;
-      results[0] = result;
+    } else if (!bestInvalidCombination || currentScore < (bestInvalidCombination as BestCombination).score) {
+      bestInvalidCombination = result;
     }
   }
 
@@ -222,9 +352,24 @@ export function findBestCombination(
     const combinations: ArmorPiece[][] = [];
     const current: ArmorPiece[] = [];
 
-    // Séparer les armures fixes par type
-    const letCalcChooseArmors = fixedArmors.filter(armor => armor.letCalculatorChoose);
-    const normalFixedArmors = fixedArmors.filter(armor => !armor.letCalculatorChoose);
+    // Fonction pour filtrer les 3ème stats en fonction des stats cibles
+    function getValidThirdStats(pattern: typeof ARMOR_PATTERNS[0]): StatType[] {
+      const validStats = pattern.possibleThirdStats.filter(stat => 
+        stat !== pattern.mainStat && 
+        stat !== pattern.subStat && 
+        targetStats[stat] > 0
+      );
+      
+      // Si aucune stat valide n'est trouvée, retourner toutes les stats possibles
+      if (validStats.length === 0) {
+        return pattern.possibleThirdStats.filter(stat => 
+          stat !== pattern.mainStat && 
+          stat !== pattern.subStat
+        );
+      }
+      
+      return validStats;
+    }
 
     function generate(index: number) {
       if (index === numPieces) {
@@ -232,56 +377,32 @@ export function findBestCombination(
         if (!testedCombinations.has(key)) {
           testedCombinations.set(key, true);
           // Ajouter les armures fixes normales à la fin en conservant leurs valeurs personnalisées
-          const fullCombination = [...current, ...normalFixedArmors.map(armor => ({
+          const fullCombination = [...current, ...fixedArmors.map(armor => ({
             ...armor,
             // S'assurer que les valeurs personnalisées sont conservées
             mainStatValue: armor.mainStatValue,
             subStatValue: armor.subStatValue,
-            thirdStatValue: armor.thirdStatValue
+            thirdStatValue: armor.thirdStatValue,
+            isExotic: armor.isExotic
           }))];
           combinations.push(fullCombination);
         }
         return;
       }
 
-      // Si c'est une armure en mode "let calculator choose", on utilise les valeurs renseignées
-      if (index < letCalcChooseArmors.length) {
-        const fixedArmor = letCalcChooseArmors[index];
-        for (const pattern of patterns) {
-          for (const thirdStat of pattern.possibleThirdStats) {
-            if (thirdStat !== pattern.mainStat && thirdStat !== pattern.subStat) {
-              current.push({
-                pattern,
-                tier,
-                thirdStat,
-                smallMods: [],
-                largeMods: [],
-                letCalculatorChoose: true,
-                mainStatValue: fixedArmor.mainStatValue,
-                subStatValue: fixedArmor.subStatValue,
-                thirdStatValue: fixedArmor.thirdStatValue
-              });
-              generate(index + 1);
-              current.pop();
-            }
-          }
-        }
-      } else {
-        // Pour les armures normales, on utilise le pattern tel quel
-        for (const pattern of patterns) {
-          for (const thirdStat of pattern.possibleThirdStats) {
-            if (thirdStat !== pattern.mainStat && thirdStat !== pattern.subStat) {
-              current.push({
-                pattern,
-                tier,
-                thirdStat,
-                smallMods: [],
-                largeMods: []
-              });
-              generate(index + 1);
-              current.pop();
-            }
-          }
+      // Pour les armures normales, on utilise le pattern tel quel
+      for (const pattern of patterns) {
+        const validThirdStats = getValidThirdStats(pattern);
+        for (const thirdStat of validThirdStats) {
+          current.push({
+            pattern,
+            tier,
+            thirdStat,
+            smallMods: [],
+            largeMods: []
+          });
+          generate(index + 1);
+          current.pop();
         }
       }
     }
@@ -394,65 +515,51 @@ export function findBestCombination(
     const isTargetAchieved = isTargetStatsAchieved(currentStats, targetStats);
     const result: BestCombination = {
       combination: pieces,
-      remainingMods: { 
-        small: modCounts.small - smallModsUsed, 
-        large: modCounts.large - largeModsUsed 
-      },
+      remainingMods: { small: modCounts.small - smallModsUsed, large: modCounts.large - largeModsUsed },
       score: currentScore,
       isTargetAchieved
     };
 
     if (isTargetAchieved) {
-      results.push(result);
-      // Si on a trouvé 50 combinaisons qui atteignent les stats cibles, on arrête
-      if (results.length >= 50) {
-        return results.sort((a, b) => {
-          const aArchetypes = countUniqueArchetypes(a.combination);
-          const bArchetypes = countUniqueArchetypes(b.combination);
-          if (aArchetypes !== bArchetypes) {
-            return aArchetypes - bArchetypes;
-          }
-          return a.score - b.score;
-        });
+      // Vérifier si cette solution n'est pas un doublon
+      if (!isSolutionDuplicate(pieces, currentStats)) {
+        results.push(result);
+        addSolutionToExisting(pieces, currentStats);
       }
-    } else if (currentScore < bestScore && results.length === 0) {
-      // On ne garde que la meilleure combinaison invalide si on n'a pas encore de résultats valides
-      bestScore = currentScore;
-      results[0] = result;
+    } else if (!bestInvalidCombination || currentScore < (bestInvalidCombination as BestCombination).score) {
+      bestInvalidCombination = result;
     }
   }
 
-  // Trier les résultats par nombre d'archetypes puis par score
-  return results.sort((a, b) => {
-    const aArchetypes = countUniqueArchetypes(a.combination);
-    const bArchetypes = countUniqueArchetypes(b.combination);
-    if (aArchetypes !== bArchetypes) {
-      return aArchetypes - bArchetypes;
-    }
-    return a.score - b.score;
-  });
+  // Si on a des résultats valides, les retourner triés
+  if (results.length > 0) {
+    return results.sort((a, b) => {
+      const aArchetypes = countUniqueArchetypes(a.combination);
+      const bArchetypes = countUniqueArchetypes(b.combination);
+      if (aArchetypes !== bArchetypes) {
+        return aArchetypes - bArchetypes;
+      }
+      return a.score - b.score;
+    });
+  }
+
+  // Sinon, retourner la meilleure combinaison invalide
+  return bestInvalidCombination ? [bestInvalidCombination] : [];
 }
 
 function isTargetStatsAchieved(actual: ArmorStats, target: ArmorStats): boolean {
-  return Object.keys(target).every(stat => {
-    const key = stat as keyof ArmorStats;
-    return actual[key] >= target[key];
-  });
+  return Object.keys(target).every(stat => actual[stat as StatType] >= target[stat as StatType]);
 }
 
 function calculateScore(actual: ArmorStats, target: ArmorStats): number {
-  return Object.keys(actual).reduce((score, stat) => {
-    const key = stat as keyof ArmorStats;
-    const diff = target[key] - actual[key];
-    // Si on est au-dessus de la cible, on ne pénalise pas
-    if (diff <= 0) return score;
-    // Sinon, on utilise le carré de la différence
-    return score + diff * diff;
+  return Object.keys(target).reduce((total, stat) => {
+    const diff = target[stat as StatType] - actual[stat as StatType];
+    return total + Math.max(0, diff);
   }, 0);
 }
 
 function calculatePatternScore(pattern: typeof ARMOR_PATTERNS[0], targetStats: ArmorStats): number {
   const mainStatValue = targetStats[pattern.mainStat];
   const subStatValue = targetStats[pattern.subStat];
-  return -(mainStatValue + subStatValue); // Negative because we want higher values first
+  return -(mainStatValue + subStatValue); // Plus négatif = meilleur pattern
 } 

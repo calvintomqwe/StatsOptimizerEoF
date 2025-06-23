@@ -21,6 +21,7 @@ export interface ArmorPiece {
   mainStatValue?: string;
   subStatValue?: string;
   thirdStatValue?: string;
+  isExotic?: boolean;
 }
 
 export interface ArmorStats {
@@ -59,4 +60,21 @@ export interface BestCombination {
   };
   score: number;
   isTargetAchieved: boolean;
+}
+
+export interface PinnedCombination {
+  id: string;
+  name: string;
+  combination: ArmorPiece[];
+  remainingMods: {
+    small: number;
+    large: number;
+  };
+  score: number;
+  isTargetAchieved: boolean;
+  archetypeCount: number;
+  createdAt: string;
+  totalStats: ArmorStats;
+  isCustomTier: boolean;
+  customTierValues?: { main: number; sub: number; third: number };
 } 
