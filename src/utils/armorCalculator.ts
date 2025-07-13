@@ -151,7 +151,7 @@ export function findBestCombination(
       )
     );
 
-    return uniqueResults.sort((a, b) => {
+    const sortedResults = uniqueResults.sort((a, b) => {
       const aArchetypes = countUniqueArchetypes(a.combination);
       const bArchetypes = countUniqueArchetypes(b.combination);
       if (aArchetypes !== bArchetypes) {
@@ -159,6 +159,9 @@ export function findBestCombination(
       }
       return a.score - b.score;
     });
+    
+    // Limiter à 50 résultats maximum
+    return sortedResults.slice(0, 50);
   }
 
   // Sinon, utiliser la logique normale
@@ -531,9 +534,9 @@ function findBestCombinationInternal(
     }
   }
 
-  // Si on a des résultats valides, les retourner triés
+  // Si on a des résultats valides, les retourner triés et limités à 50
   if (results.length > 0) {
-    return results.sort((a, b) => {
+    const sortedResults = results.sort((a, b) => {
       const aArchetypes = countUniqueArchetypes(a.combination);
       const bArchetypes = countUniqueArchetypes(b.combination);
       if (aArchetypes !== bArchetypes) {
@@ -541,6 +544,9 @@ function findBestCombinationInternal(
       }
       return a.score - b.score;
     });
+    
+    // Limiter à 50 résultats maximum
+    return sortedResults.slice(0, 50);
   }
 
   // Sinon, retourner la meilleure combinaison invalide
